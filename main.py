@@ -2,26 +2,23 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from functools import lru_cache
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import joblib
-import numpy as np
 import pandas as pd
 from catboost import Pool
-from fastapi import Request
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-
 
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -37,6 +34,7 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "https://ollama-latest-ypq1.onrender.com")
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(title="Risk & Care Plan API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -45,8 +43,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.mount("/reports", StaticFiles(directory=str(REPORTS_DIR)), name="reports")
+
 def _device():
     try:
         import torch
@@ -63,27 +61,43 @@ try:
 except Exception as e:
     raise RuntimeError(f"Failed to load CatBoost models: {e}")
 
-emb = HuggingFaceEmbeddings(model_name=EMBED_MODEL, model_kwargs={"device": DEVICE})
+
+# === Lazy embedding loader ===
+@lru_cache(maxsize=1)
+def get_embeddings():
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(
+        model_name=EMBED_MODEL,
+        model_kwargs={"device": DEVICE}
+    )
+
 
 def _load_or_build_vectorstore():
     if FAISS_INDEX_DIR.exists() and any(FAISS_INDEX_DIR.iterdir()):
-        return FAISS.load_local(FAISS_INDEX_DIR.as_posix(), emb, allow_dangerous_deserialization=True)
+        return FAISS.load_local(
+            FAISS_INDEX_DIR.as_posix(),
+            get_embeddings(),
+            allow_dangerous_deserialization=True
+        )
     if not PDF_FILE_PATH.exists():
         raise RuntimeError(f"Knowledge PDF not found: {PDF_FILE_PATH}")
     loader = PyPDFLoader(str(PDF_FILE_PATH))
     docs = loader.load()
     if not docs:
         raise RuntimeError("No documents loaded from PDF.")
-    vs = FAISS.from_documents(docs, embedding=emb)
+    vs = FAISS.from_documents(docs, embedding=get_embeddings())
     vs.save_local(FAISS_INDEX_DIR.as_posix())
     return vs
 
+
 vectorstore = _load_or_build_vectorstore()
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 6})
+
 llm = Ollama(
     model="llama3",
     base_url=OLLAMA_BASE
 )
+
 FEATURE_NAMES: List[str] = [
     'age','gender','systolic','diastolic','blood_pressure','cholesterol','bmi','glucose','HbA1c',
     'insulin','heart_rate','smoking','alcohol','family_history','physical_activity','sodium_intake','fruit',
@@ -116,7 +130,6 @@ def make_pool_from_patient(patient_record: Dict[str, Any]):
                 X[c] = X[c].astype("Int64").astype(str)
             else:
                 X[c] = X[c].astype(str)
-
     return Pool(X, cat_features=CATEGORICAL_FEATURES)
 
 def predict_all_risks(patient_record: Dict[str, Any]) -> Dict[str, Any]:
@@ -229,6 +242,7 @@ def save_care_plan_pdf(patient_name: str, patient_id: Any, care_plan_text: str, 
     doc.build(elements)
     return fn
 
+
 class PatientRecord(BaseModel):
     patient_id: int | str
     name: Optional[str] = None
@@ -283,7 +297,6 @@ async def predict(record: PatientRecord, request: Request):
         raise HTTPException(status_code=400, detail=str(e))
     
 
-    
 @app.get("/")
 def root():
     return {"ok": True, "message": "Risk & Care Plan API", "reports": "/reports/"}
