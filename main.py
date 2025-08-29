@@ -33,7 +33,7 @@ PDF_FILE_PATH       = Path(os.getenv("PDF_FILE_PATH",       BASE_DIR / "data/fin
 FAISS_INDEX_DIR     = Path(os.getenv("FAISS_INDEX_DIR",     BASE_DIR / "faiss_index"))
 REPORTS_DIR         = Path(os.getenv("REPORTS_DIR",         BASE_DIR / "reports"))
 
-EMBED_MODEL         = os.getenv("EMBED_MODEL", "sentence-transformers/all-mpnet-base-v2")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "https://ollama-latest-ypq1.onrender.com")
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
