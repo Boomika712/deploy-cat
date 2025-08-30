@@ -7,10 +7,11 @@ numpy==1.26.4
 pandas==2.2.2
 reportlab==4.2.0
 torch==2.3.1
+
 langchain==0.2.7
 langchain-community==0.2.7
 langchain-ollama==0.1.0
+langchain-cohere==0.4.5   # pin to same family as langchain
+cohere==5.13.6            # ✅ compatible with langchain-cohere
 faiss-cpu==1.8.0
 pypdf==4.2.0
-cohere==5.5.8
-langchain-cohere==0.4.5
