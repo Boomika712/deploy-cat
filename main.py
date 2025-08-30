@@ -18,7 +18,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-from langchain_cohere.embeddings import CohereEmbeddings
+from langchain_community.embeddings import CohereEmbeddings
 
 BASE_DIR = Path(__file__).parent.resolve()
 
