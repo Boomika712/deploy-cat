@@ -14,3 +14,4 @@ langchain-cohere  # pin to same family as langchain
 cohere==5.13.6            # ✅ compatible with langchain-cohere
 faiss-cpu==1.8.0
 pypdf==4.2.0
+langchain-groq==0.1.5
