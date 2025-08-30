@@ -13,7 +13,7 @@ from catboost import Pool
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import Ollama
+from langchain_groq import ChatGroq
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
@@ -30,7 +30,6 @@ PDF_FILE_PATH       = Path(os.getenv("PDF_FILE_PATH",       BASE_DIR / "data/fin
 FAISS_INDEX_DIR     = Path(os.getenv("FAISS_INDEX_DIR",     BASE_DIR / "faiss_index"))
 REPORTS_DIR         = Path(os.getenv("REPORTS_DIR",         BASE_DIR / "reports"))
 
-OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "https://ollama-latest-ypq1.onrender.com")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY","cKiyrJbqCO5mgRtgH03r0xoMnSY4Paqxw5fVW0L3")  # ✅ don’t hardcode, read from env var
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -84,9 +83,9 @@ def _load_or_build_vectorstore():
 vectorstore = _load_or_build_vectorstore()
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 6})
 
-llm = Ollama(
-    model="llama3",
-    base_url=OLLAMA_BASE
+llm = ChatGroq(
+    groq_api_key=os.getenv("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"),
+    model="llama3-8b-8192"   # or "llama3-70b-8192"
 )
 
 
