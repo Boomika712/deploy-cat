@@ -64,9 +64,8 @@ emb = CohereEmbeddings(
 
 
 # === Build or Load Vectorstore ===
-# === Build or Load Vectorstore ===
 def _load_or_build_vectorstore():
-    # Always clear FAISS index dir to avoid stale pickle issues on redeploy
+    # Always start clean (avoid stale pickle/Pydantic v1)
     if FAISS_INDEX_DIR.exists():
         shutil.rmtree(FAISS_INDEX_DIR, ignore_errors=True)
 
@@ -78,12 +77,12 @@ def _load_or_build_vectorstore():
     if not docs:
         raise RuntimeError("No documents loaded from PDF.")
 
+    # Build fresh FAISS index
     vs = FAISS.from_documents(docs, embedding=emb)
 
-    # ✅ Use JSON serialization for Pydantic v2
+    # Save safely in JSON format (not pickle)
     vs.save_local(FAISS_INDEX_DIR.as_posix(), serialize=True)
     return vs
-
 
 
 vectorstore = _load_or_build_vectorstore()
