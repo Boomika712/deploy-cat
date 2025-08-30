@@ -31,7 +31,7 @@ FAISS_INDEX_DIR     = Path(os.getenv("FAISS_INDEX_DIR",     BASE_DIR / "faiss_in
 REPORTS_DIR         = Path(os.getenv("REPORTS_DIR",         BASE_DIR / "reports"))
 
 OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "https://ollama-latest-ypq1.onrender.com")
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")  # ✅ don’t hardcode, read from env var
+COHERE_API_KEY = os.getenv("COHERE_API_KEY","cKiyrJbqCO5mgRtgH03r0xoMnSY4Paqxw5fVW0L3")  # ✅ don’t hardcode, read from env var
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
