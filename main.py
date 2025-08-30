@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +18,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+from langchain_cohere import CohereEmbeddings  # ✅ Cohere embeddings
 
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -30,8 +30,8 @@ PDF_FILE_PATH       = Path(os.getenv("PDF_FILE_PATH",       BASE_DIR / "data/fin
 FAISS_INDEX_DIR     = Path(os.getenv("FAISS_INDEX_DIR",     BASE_DIR / "faiss_index"))
 REPORTS_DIR         = Path(os.getenv("REPORTS_DIR",         BASE_DIR / "reports"))
 
-EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "https://ollama-latest-ypq1.onrender.com")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")  # ✅ don’t hardcode, read from env var
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -45,15 +45,8 @@ app.add_middleware(
 )
 app.mount("/reports", StaticFiles(directory=str(REPORTS_DIR)), name="reports")
 
-def _device():
-    try:
-        import torch
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    except Exception:
-        return "cpu"
 
-DEVICE = _device()
-
+# === Load CatBoost Models ===
 try:
     clf_diabetes = joblib.load(DIABETES_MODEL_PATH)
     clf_heart    = joblib.load(HEART_MODEL_PATH)
@@ -62,21 +55,19 @@ except Exception as e:
     raise RuntimeError(f"Failed to load CatBoost models: {e}")
 
 
-# === Lazy embedding loader ===
-@lru_cache(maxsize=1)
-def get_embeddings():
-    from langchain_huggingface import HuggingFaceEmbeddings
-    return HuggingFaceEmbeddings(
-        model_name=EMBED_MODEL,
-        model_kwargs={"device": DEVICE}
-    )
+# === Embeddings (Cohere) ===
+emb = CohereEmbeddings(
+    model="embed-english-v3.0",
+    cohere_api_key=COHERE_API_KEY
+)
 
 
+# === Build or Load Vectorstore ===
 def _load_or_build_vectorstore():
     if FAISS_INDEX_DIR.exists() and any(FAISS_INDEX_DIR.iterdir()):
         return FAISS.load_local(
             FAISS_INDEX_DIR.as_posix(),
-            get_embeddings(),
+            emb,
             allow_dangerous_deserialization=True
         )
     if not PDF_FILE_PATH.exists():
@@ -85,7 +76,7 @@ def _load_or_build_vectorstore():
     docs = loader.load()
     if not docs:
         raise RuntimeError("No documents loaded from PDF.")
-    vs = FAISS.from_documents(docs, embedding=get_embeddings())
+    vs = FAISS.from_documents(docs, embedding=emb)
     vs.save_local(FAISS_INDEX_DIR.as_posix())
     return vs
 
@@ -98,6 +89,8 @@ llm = Ollama(
     base_url=OLLAMA_BASE
 )
 
+
+# === Risk Prediction Logic ===
 FEATURE_NAMES: List[str] = [
     'age','gender','systolic','diastolic','blood_pressure','cholesterol','bmi','glucose','HbA1c',
     'insulin','heart_rate','smoking','alcohol','family_history','physical_activity','sodium_intake','fruit',
@@ -154,6 +147,8 @@ def predict_all_risks(patient_record: Dict[str, Any]) -> Dict[str, Any]:
         },
     }
 
+
+# === Knowledge Retrieval & Prompting ===
 def get_kb_snippets(retriever, patient_text: str = "", k: int = 6) -> str:
     query = "diabetes, heart disease, hypertension prevention and care. " + (patient_text or "")
     docs = retriever.get_relevant_documents(query)[:k]
@@ -212,6 +207,8 @@ def generate_care_plan_from_model(preds: Dict[str, Any]) -> str:
     response = llm.invoke(prompt)
     return response if isinstance(response, str) else getattr(response, "content", str(response))
 
+
+# === PDF Export ===
 def save_care_plan_pdf(patient_name: str, patient_id: Any, care_plan_text: str, out_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     fn = out_dir / f"care_plan_{patient_id}_{ts}.pdf"
@@ -243,6 +240,7 @@ def save_care_plan_pdf(patient_name: str, patient_id: Any, care_plan_text: str, 
     return fn
 
 
+# === API Models ===
 class PatientRecord(BaseModel):
     patient_id: int | str
     name: Optional[str] = None
@@ -275,6 +273,8 @@ class PredictResponse(BaseModel):
     care_plan: str
     pdf_url: str
 
+
+# === Endpoints ===
 @app.post("/predict", response_model=PredictResponse)
 async def predict(record: PatientRecord, request: Request):
     try:
