@@ -81,7 +81,7 @@ def _load_or_build_vectorstore():
     vs = FAISS.from_documents(docs, embedding=emb)
 
     # Save safely in JSON format (not pickle)
-    vs.save_local(FAISS_INDEX_DIR.as_posix(), serialize=True)
+    vs.save_local(FAISS_INDEX_DIR.as_posix())
     return vs
 
 
