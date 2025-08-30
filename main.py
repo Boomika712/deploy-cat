@@ -31,6 +31,7 @@ FAISS_INDEX_DIR     = Path(os.getenv("FAISS_INDEX_DIR",     BASE_DIR / "faiss_in
 REPORTS_DIR         = Path(os.getenv("REPORTS_DIR",         BASE_DIR / "reports"))
 
 COHERE_API_KEY = os.getenv("COHERE_API_KEY","cKiyrJbqCO5mgRtgH03r0xoMnSY4Paqxw5fVW0L3")  # ✅ don’t hardcode, read from env var
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # ✅ don’t hardcode, read from env var
 
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -84,7 +85,7 @@ vectorstore = _load_or_build_vectorstore()
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 6})
 
 llm = ChatGroq(
-    groq_api_key=os.getenv("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"),
+   groq_api_key=os.getenv("GROQ_API_KEY"),
     model="llama3-8b-8192"   # or "llama3-70b-8192"
 )
 
