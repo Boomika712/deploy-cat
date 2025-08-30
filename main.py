@@ -10,6 +10,7 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 from catboost import Pool
+import shutil
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
@@ -63,22 +64,26 @@ emb = CohereEmbeddings(
 
 
 # === Build or Load Vectorstore ===
+# === Build or Load Vectorstore ===
 def _load_or_build_vectorstore():
-    if FAISS_INDEX_DIR.exists() and any(FAISS_INDEX_DIR.iterdir()):
-        return FAISS.load_local(
-            FAISS_INDEX_DIR.as_posix(),
-            emb,
-            allow_dangerous_deserialization=True
-        )
+    # Always clear FAISS index dir to avoid stale pickle issues on redeploy
+    if FAISS_INDEX_DIR.exists():
+        shutil.rmtree(FAISS_INDEX_DIR, ignore_errors=True)
+
     if not PDF_FILE_PATH.exists():
         raise RuntimeError(f"Knowledge PDF not found: {PDF_FILE_PATH}")
+
     loader = PyPDFLoader(str(PDF_FILE_PATH))
     docs = loader.load()
     if not docs:
         raise RuntimeError("No documents loaded from PDF.")
+
     vs = FAISS.from_documents(docs, embedding=emb)
-    vs.save_local(FAISS_INDEX_DIR.as_posix())
+
+    # ✅ Use JSON serialization for Pydantic v2
+    vs.save_local(FAISS_INDEX_DIR.as_posix(), serialize=True)
     return vs
+
 
 
 vectorstore = _load_or_build_vectorstore()
