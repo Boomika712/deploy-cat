@@ -90,7 +90,7 @@ retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k
 
 llm = ChatGroq(
    groq_api_key=os.getenv("GROQ_API_KEY"),
-    model="llama3-8b-8192"   # or "llama3-70b-8192"
+    model="llama-3.1-8b-instant"   # or "llama3-70b-8192"
 )
 
 
